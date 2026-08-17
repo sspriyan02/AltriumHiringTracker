@@ -1,0 +1,24 @@
+﻿@inherits LayoutComponentBase
+
+<div class="app-layout-with-sidebar">
+    <aside class="app-sidebar">
+        <div class="app-sidebar-header">
+            <span class="app-sidebar-logo">A</span>
+            <span class="app-sidebar-title">altrium</span>
+        </div>
+
+        <nav class="app-sidebar-nav">
+            <span class="app-sidebar-section-label">Recruitment</span>
+
+            <a href="/dashboard" class="app-sidebar-link">Dashboard</a>
+            <a href="/vacancies" class="app-sidebar-link">Vacancies</a>
+            <a href="/candidates" class="app-sidebar-link">Candidates</a>
+            <a href="/pipeline" class="app-sidebar-link">Recruitment pipeline</a>
+            <a href="/interviews" class="app-sidebar-link">Interview scheduling</a>
+        </nav>
+    </aside>
+
+    <main class="app-sidebar-main">
+        @Body
+    </main>
+</div>

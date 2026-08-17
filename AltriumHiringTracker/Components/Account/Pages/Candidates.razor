@@ -1,0 +1,341 @@
+﻿@page "/candidates"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "HR")]
+
+@using AltriumHiringTracker.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+
+<PageTitle>Candidates</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h1 class="h3 mb-1">Candidate screening</h1>
+            <p class="text-muted mb-0">
+                Review automatically screened applications and their match results.
+            </p>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <p class="text-muted">Loading applications...</p>
+    }
+    else if (applications.Count == 0)
+    {
+        <div class="alert alert-info">
+            No candidate applications have been submitted yet.
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Candidate</th>
+                                <th>Vacancy</th>
+                                <th>Experience</th>
+                                <th>Qualification</th>
+                                <th>Match score</th>
+                                <th>Category</th>
+                                <th>Status</th>
+                                <th>CV</th>
+                                <th>Applied</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var candidate in applications)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">@candidate.FullName</div>
+                                        <div class="small text-muted">@candidate.Email</div>
+                                        <div class="small text-muted">@candidate.PhoneNumber</div>
+                                    </td>
+
+                                    <td>
+                                        <div class="fw-semibold">@candidate.Vacancy?.Title</div>
+                                        <div class="small text-muted">
+                                            ALT-@candidate.VacancyId.ToString("0000")
+                                        </div>
+                                    </td>
+
+                                    <td>@candidate.YearsOfExperience year(s)</td>
+
+                                    <td>@candidate.HighestQualification</td>
+
+                                    <td>
+                                        @if (candidate.MatchScore.HasValue)
+                                        {
+                                            <span class="fw-semibold">
+                                                @candidate.MatchScore.Value.ToString("0.##")%
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Not assessed</span>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        <span class="@GetCategoryBadgeClass(candidate.MatchCategory)">
+                                            @candidate.MatchCategory
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        <span class="@GetStatusBadgeClass(candidate.Status)">
+                                            @candidate.Status
+                                        </span>
+                                    </td>
+
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(candidate.CvFilePath))
+                                        {
+                                            <a href="@candidate.CvFilePath"
+                                               target="_blank"
+                                               class="btn btn-sm btn-outline-secondary">
+                                                View CV
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No CV</span>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        @candidate.SubmittedAt.ToLocalTime().ToString("dd MMM yyyy")
+                                    </td>
+
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary"
+                                                @onclick="() => OpenDetails(candidate)">
+                                            Details
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (selectedApplication is not null)
+{
+    <div class="modal fade show d-block"
+         tabindex="-1"
+         style="background-color: rgba(0,0,0,0.5);">
+
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">@selectedApplication.FullName</h5>
+                        <div class="text-muted small">
+                            Application for @selectedApplication.Vacancy?.Title
+                        </div>
+                    </div>
+
+                    <button type="button"
+                            class="btn-close"
+                            aria-label="Close"
+                            @onclick="CloseDetails">
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="text-muted small">Email</div>
+                            <div>@selectedApplication.Email</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="text-muted small">Phone number</div>
+                            <div>@selectedApplication.PhoneNumber</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="text-muted small">Experience</div>
+                            <div>@selectedApplication.YearsOfExperience year(s)</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="text-muted small">Qualification</div>
+                            <div>@selectedApplication.HighestQualification</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="text-muted small">Match score</div>
+                            <div class="fw-semibold">
+                                @(selectedApplication.MatchScore?.ToString("0.##") ?? "Not assessed")%
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="text-muted small">Automatic result</div>
+                            <span class="@GetStatusBadgeClass(selectedApplication.Status)">
+                                @selectedApplication.Status
+                            </span>
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    <h6>Matched criteria</h6>
+                    <p style="white-space: pre-line;">
+                        @selectedApplication.MatchedCriteria
+                    </p>
+
+                    <h6 class="mt-4">Missing criteria</h6>
+                    <p class="mb-0" style="white-space: pre-line;">
+                        @selectedApplication.MissingCriteria
+                    </p>
+                </div>
+
+                <div class="modal-footer">
+                    @if (!string.IsNullOrWhiteSpace(selectedApplication.CvFilePath))
+                    {
+                        <a href="@selectedApplication.CvFilePath"
+                           target="_blank"
+                           class="btn btn-outline-secondary">
+                            View CV
+                        </a>
+                    }
+
+                    @if (selectedApplication.Status == "Shortlisted")
+                    {
+                        <button type="button"
+                                class="btn btn-success"
+                                @onclick="ApproveForInterviewAsync">
+                            Approve for interview
+                        </button>
+
+                        <button type="button"
+                                class="btn btn-outline-danger"
+                                @onclick="RejectCandidateAsync">
+                            Reject
+                        </button>
+                    }
+
+                    <button type="button"
+                            class="btn btn-warning text-dark"
+                            @onclick="CloseDetails">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CandidateApplication> applications = new();
+    private CandidateApplication? selectedApplication;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadApplicationsAsync();
+        isLoading = false;
+    }
+
+    private async Task LoadApplicationsAsync()
+    {
+        applications = await DbContext.CandidateApplications
+            .Include(application => application.Vacancy)
+            .OrderByDescending(application => application.SubmittedAt)
+            .ToListAsync();
+    }
+
+    private void OpenDetails(CandidateApplication application)
+    {
+        selectedApplication = application;
+    }
+
+    private void CloseDetails()
+    {
+        selectedApplication = null;
+    }
+
+    private async Task ApproveForInterviewAsync()
+    {
+        if (selectedApplication is null)
+        {
+            return;
+        }
+
+        var applicationToUpdate = await DbContext.CandidateApplications
+            .FirstOrDefaultAsync(application => application.Id == selectedApplication.Id);
+
+        if (applicationToUpdate is null)
+        {
+            return;
+        }
+
+        applicationToUpdate.Status = "Approved for Interview";
+
+        await DbContext.SaveChangesAsync();
+
+        selectedApplication.Status = "Approved for Interview";
+    }
+
+    private async Task RejectCandidateAsync()
+    {
+        if (selectedApplication is null)
+        {
+            return;
+        }
+
+        var applicationToUpdate = await DbContext.CandidateApplications
+            .FirstOrDefaultAsync(application => application.Id == selectedApplication.Id);
+
+        if (applicationToUpdate is null)
+        {
+            return;
+        }
+
+        applicationToUpdate.Status = "Rejected";
+
+        await DbContext.SaveChangesAsync();
+
+        selectedApplication.Status = "Rejected";
+    }
+
+    private static string GetCategoryBadgeClass(string? category)
+    {
+        return category switch
+        {
+            "High match" => "badge text-bg-success",
+            "Medium match" => "badge text-bg-warning",
+            "Low match" => "badge text-bg-danger",
+            _ => "badge text-bg-secondary"
+        };
+    }
+
+    private static string GetStatusBadgeClass(string? status)
+    {
+        return status switch
+        {
+            "Shortlisted" => "badge text-bg-success",
+            "Approved for Interview" => "badge text-bg-primary",
+            "In interview process" => "badge text-bg-info",
+            "Under review" => "badge text-bg-warning",
+            "Rejected" => "badge text-bg-danger",
+            "Not shortlisted" => "badge text-bg-danger",
+            _ => "badge text-bg-secondary"
+        };
+    }
+}

@@ -1,0 +1,302 @@
+﻿@page "/dashboard"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using AltriumHiringTracker.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Dashboard</PageTitle>
+
+@if (isLoading)
+{
+    <p class="text-muted">Loading dashboard...</p>
+}
+else
+{
+    <AuthorizeView Roles="HR">
+        <Authorized>
+            <div class="mb-4">
+                <h1 class="h3 mb-1">Recruitment Dashboard</h1>
+                <p class="text-muted mb-0">
+                    Overview of current recruitment activity.
+                </p>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">Open vacancies</div>
+                            <div class="display-6 fw-semibold">@openVacancyCount</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">Total applications</div>
+                            <div class="display-6 fw-semibold">@applicationCount</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">Shortlisted candidates</div>
+                            <div class="display-6 fw-semibold text-success">
+                                @shortlistedCount
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-xl-3">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">Under review</div>
+                            <div class="display-6 fw-semibold text-warning">
+                                @underReviewCount
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mt-4">
+                <div class="card-body">
+                    <h2 class="h5 mb-3">Quick actions</h2>
+
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-warning text-dark"
+                           href="vacancies">
+                            Manage vacancies
+                        </a>
+
+                        <a class="btn btn-outline-secondary"
+                           href="candidates">
+                            Review candidates
+                        </a>
+
+                        <a class="btn btn-outline-secondary"
+                           href="interview-scheduling">
+                            Interview scheduling
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="Interviewer">
+        <Authorized>
+            <div class="mb-4">
+                <h1 class="h3 mb-1">Interviewer Dashboard</h1>
+                <p class="text-muted mb-0">
+                    Overview of your assigned interviews.
+                </p>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6 col-xl-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">
+                                Assigned scheduled interviews
+                            </div>
+
+                            <div class="display-6 fw-semibold">
+                                @assignedInterviewCount
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-xl-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">
+                                Upcoming interviews
+                            </div>
+
+                            <div class="display-6 fw-semibold text-primary">
+                                @upcomingInterviewCount
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (nextInterview is null)
+            {
+                <div class="alert alert-info mt-4">
+                    You have no upcoming interviews at the moment.
+                </div>
+            }
+            else
+            {
+                <div class="card shadow-sm border-0 mt-4">
+                    <div class="card-body">
+                        <h2 class="h5 mb-3">Next interview</h2>
+
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="text-muted small">Candidate</div>
+                                <div class="fw-semibold">
+                                    @nextInterview.CandidateApplication?.FullName
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="text-muted small">Vacancy</div>
+                                <div>
+                                    @nextInterview.CandidateApplication?.Vacancy?.Title
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="text-muted small">Stage</div>
+                                <div>@nextInterview.Stage</div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="text-muted small">Date and time</div>
+                                <div>
+                                    @(nextInterview.ScheduledDateTime
+                                        .ToLocalTime()
+                                        .ToString("dd MMM yyyy, hh:mm tt"))
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="text-muted small">Duration</div>
+                                <div>@nextInterview.DurationMinutes minutes</div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="text-muted small">Mode</div>
+                                <div>@nextInterview.Mode</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <div class="mt-4">
+                <a class="btn btn-warning text-dark"
+                   href="my-interviews">
+                    View my interviews
+                </a>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+
+    <AuthorizeView Roles="Management">
+        <Authorized>
+            <div class="mb-4">
+                <h1 class="h3 mb-1">Management Dashboard</h1>
+                <p class="text-muted mb-0">
+                    Recruitment performance and reporting will appear here.
+                </p>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6 col-xl-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">Open vacancies</div>
+                            <div class="display-6 fw-semibold">@openVacancyCount</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-xl-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">Total applications</div>
+                            <div class="display-6 fw-semibold">@applicationCount</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-xl-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-body">
+                            <div class="text-muted small">Shortlisted candidates</div>
+                            <div class="display-6 fw-semibold text-success">
+                                @shortlistedCount
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+}
+
+@code {
+    private bool isLoading = true;
+
+    private int openVacancyCount;
+    private int applicationCount;
+    private int shortlistedCount;
+    private int underReviewCount;
+
+    private int assignedInterviewCount;
+    private int upcomingInterviewCount;
+    private Interview? nextInterview;
+
+    protected override async Task OnInitializedAsync()
+    {
+        openVacancyCount = await DbContext.Vacancies
+            .CountAsync(v => v.Status == "Open");
+
+        applicationCount = await DbContext.CandidateApplications
+            .CountAsync();
+
+        shortlistedCount = await DbContext.CandidateApplications
+            .CountAsync(a => a.Status == "Shortlisted");
+
+        underReviewCount = await DbContext.CandidateApplications
+            .CountAsync(a => a.Status == "Under review");
+
+        var authenticationState =
+            await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
+        var currentUserEmail =
+            authenticationState.User.Identity?.Name;
+
+        if (!string.IsNullOrWhiteSpace(currentUserEmail))
+        {
+            assignedInterviewCount = await DbContext.Interviews
+                .CountAsync(interview =>
+                    interview.InterviewerEmail == currentUserEmail &&
+                    interview.Status == "Scheduled");
+
+            var now = DateTime.UtcNow;
+
+            upcomingInterviewCount = await DbContext.Interviews
+                .CountAsync(interview =>
+                    interview.InterviewerEmail == currentUserEmail &&
+                    interview.Status == "Scheduled" &&
+                    interview.ScheduledDateTime >= now);
+
+            nextInterview = await DbContext.Interviews
+                .Include(interview => interview.CandidateApplication)
+                    .ThenInclude(candidate => candidate!.Vacancy)
+                .Where(interview =>
+                    interview.InterviewerEmail == currentUserEmail &&
+                    interview.Status == "Scheduled" &&
+                    interview.ScheduledDateTime >= now)
+                .OrderBy(interview => interview.ScheduledDateTime)
+                .FirstOrDefaultAsync();
+        }
+
+        isLoading = false;
+    }
+}

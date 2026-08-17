@@ -1,0 +1,613 @@
+﻿@page "/interview-scheduling"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "HR")]
+
+@using AltriumHiringTracker.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+
+<PageTitle>Interview Scheduling</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="mb-4">
+        <h1 class="h3 mb-1">Interview Scheduling</h1>
+        <p class="text-muted mb-0">
+            Schedule interviews for candidates approved by HR.
+        </p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="alert @messageClass alert-dismissible fade show" role="alert">
+            @message
+
+            <button type="button"
+                    class="btn-close"
+                    aria-label="Close"
+                    @onclick="ClearMessage">
+            </button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <p class="text-muted">Loading interview information...</p>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body">
+                        <h2 class="h5 mb-1">Schedule an interview</h2>
+                        <p class="text-muted small mb-4">
+                            The candidate and assigned interviewer will be notified.
+                        </p>
+
+                        <EditForm Model="newInterview" OnValidSubmit="ScheduleInterviewAsync">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary />
+
+                            <div class="mb-3">
+                                <label class="form-label">Candidate</label>
+
+                                <InputSelect class="form-select"
+                                             @bind-Value="newInterview.CandidateApplicationId">
+                                    <option value="0">Select candidate</option>
+
+                                    @foreach (var candidate in approvedCandidates)
+                                    {
+                                        <option value="@candidate.Id">
+                                            @candidate.FullName — @candidate.Vacancy?.Title
+                                        </option>
+                                    }
+                                </InputSelect>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Stage</label>
+
+                                <InputSelect class="form-select"
+                                             @bind-Value="newInterview.Stage">
+                                    <option value="">Select stage</option>
+                                    <option value="CV Screening">CV Screening</option>
+                                    <option value="Technical Review 1">Technical Review 1</option>
+                                    <option value="Technical Review 2">Technical Review 2</option>
+                                    <option value="HR Review">HR Review</option>
+                                    <option value="Final Decision">Final Decision</option>
+                                </InputSelect>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Date</label>
+
+                                    <InputDate class="form-control"
+                                               @bind-Value="scheduledDate" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label">Time</label>
+
+                                    <InputText class="form-control"
+                                               type="time"
+                                               @bind-Value="scheduledTime" />
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mt-0">
+                                <div class="col-md-6">
+                                    <label class="form-label">Duration</label>
+
+                                    <InputSelect class="form-select"
+                                                 @bind-Value="newInterview.DurationMinutes">
+                                        <option value="30">30 minutes</option>
+                                        <option value="45">45 minutes</option>
+                                        <option value="60">60 minutes</option>
+                                        <option value="90">90 minutes</option>
+                                    </InputSelect>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label">Mode</label>
+
+                                    <InputSelect class="form-select"
+                                                 @bind-Value="newInterview.Mode">
+                                        <option value="">Select mode</option>
+                                        <option value="On site">On site</option>
+                                        <option value="Google Meet">Google Meet</option>
+                                    </InputSelect>
+                                </div>
+                            </div>
+
+                            <div class="mb-3 mt-3">
+                                <label class="form-label">Assign interviewer</label>
+
+                                <InputSelect class="form-select"
+                                             @bind-Value="newInterview.InterviewerEmail">
+                                    <option value="">Select interviewer</option>
+                                    <option value="interviewer1@altrium.com">
+                                        Interviewer 1
+                                    </option>
+                                    <option value="interviewer2@altrium.com">
+                                        Interviewer 2
+                                    </option>
+                                </InputSelect>
+                            </div>
+
+                            <button type="submit"
+                                    class="btn btn-warning text-dark w-100">
+                                Schedule interview
+                            </button>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="card shadow-sm border-0">
+                    <div class="card-body p-0">
+                        <div class="p-4 pb-2">
+                            <h2 class="h5 mb-1">All interviews</h2>
+                            <p class="text-muted small mb-0">
+                                Scheduled and cancelled interview records.
+                            </p>
+                        </div>
+
+                        @if (interviews.Count == 0)
+                        {
+                            <div class="p-4 pt-3">
+                                <div class="alert alert-info mb-0">
+                                    No interviews have been scheduled yet.
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Candidate</th>
+                                            <th>Stage</th>
+                                            <th>Date and time</th>
+                                            <th>Mode</th>
+                                            <th>Interviewer</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        @foreach (var interview in interviews)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <div class="fw-semibold">
+                                                        @interview.CandidateApplication?.FullName
+                                                    </div>
+
+                                                    <div class="small text-muted">
+                                                        @interview.CandidateApplication?.Vacancy?.Title
+                                                    </div>
+                                                </td>
+
+                                                <td>@interview.Stage</td>
+
+                                                <td>
+                                                    <div>
+                                                        @(interview.ScheduledDateTime
+                                                            .ToLocalTime()
+                                                            .ToString("dd MMM yyyy"))
+                                                    </div>
+
+                                                    <div class="small text-muted">
+                                                        @(interview.ScheduledDateTime
+                                                            .ToLocalTime()
+                                                            .ToString("hh:mm tt"))
+                                                        · @interview.DurationMinutes min
+                                                    </div>
+                                                </td>
+
+                                                <td>@interview.Mode</td>
+
+                                                <td>@GetInterviewerName(interview.InterviewerEmail)</td>
+
+                                                <td>
+                                                    <span class="@GetStatusBadgeClass(interview.Status)">
+                                                        @interview.Status
+                                                    </span>
+                                                </td>
+
+                                                <td>
+                                                    @if (interview.Status == "Scheduled")
+                                                    {
+                                                        <div class="d-flex flex-column align-items-start gap-2">
+                                                            <button class="btn btn-sm btn-outline-primary"
+                                                                    @onclick="() => OpenRescheduleDialog(interview)">
+                                                                Reschedule
+                                                            </button>
+
+                                                            <button class="btn btn-sm btn-outline-danger"
+                                                                    @onclick="() => CancelInterviewAsync(interview.Id)">
+                                                                Cancel
+                                                            </button>
+                                                        </div>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (isRescheduleDialogOpen && editingInterview is not null)
+{
+    <div class="modal fade show d-block"
+         tabindex="-1"
+         style="background-color: rgba(0,0,0,0.5);">
+
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">Reschedule interview</h5>
+                        <div class="text-muted small">
+                            @editingInterview.CandidateApplication?.FullName —
+                            @editingInterview.Stage
+                        </div>
+                    </div>
+
+                    <button type="button"
+                            class="btn-close"
+                            aria-label="Close"
+                            @onclick="CloseRescheduleDialog">
+                    </button>
+                </div>
+
+                <EditForm Model="editingInterview" OnValidSubmit="SaveRescheduledInterviewAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Candidate</label>
+
+                                <InputSelect class="form-select"
+                                             @bind-Value="editingInterview.CandidateApplicationId">
+                                    @foreach (var candidate in approvedCandidates)
+                                    {
+                                        <option value="@candidate.Id">
+                                            @candidate.FullName — @candidate.Vacancy?.Title
+                                        </option>
+                                    }
+                                </InputSelect>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Stage</label>
+
+                                <InputSelect class="form-select"
+                                             @bind-Value="editingInterview.Stage">
+                                    <option value="CV Screening">CV Screening</option>
+                                    <option value="Technical Review 1">Technical Review 1</option>
+                                    <option value="Technical Review 2">Technical Review 2</option>
+                                    <option value="HR Review">HR Review</option>
+                                    <option value="Final Decision">Final Decision</option>
+                                </InputSelect>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Date</label>
+
+                                <InputDate class="form-control"
+                                           @bind-Value="rescheduleDate" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Time</label>
+
+                                <InputText class="form-control"
+                                           type="time"
+                                           @bind-Value="rescheduleTime" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Duration</label>
+
+                                <InputSelect class="form-select"
+                                             @bind-Value="editingInterview.DurationMinutes">
+                                    <option value="30">30 minutes</option>
+                                    <option value="45">45 minutes</option>
+                                    <option value="60">60 minutes</option>
+                                    <option value="90">90 minutes</option>
+                                </InputSelect>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Mode</label>
+
+                                <InputSelect class="form-select"
+                                             @bind-Value="editingInterview.Mode">
+                                    <option value="On site">On site</option>
+                                    <option value="Google Meet">Google Meet</option>
+                                </InputSelect>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Assign interviewer</label>
+
+                                <InputSelect class="form-select"
+                                             @bind-Value="editingInterview.InterviewerEmail">
+                                    <option value="interviewer1@altrium.com">
+                                        Interviewer 1
+                                    </option>
+                                    <option value="interviewer2@altrium.com">
+                                        Interviewer 2
+                                    </option>
+                                </InputSelect>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                @onclick="CloseRescheduleDialog">
+                            Cancel
+                        </button>
+
+                        <button type="submit"
+                                class="btn btn-warning text-dark">
+                            Save changes
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CandidateApplication> approvedCandidates = new();
+    private List<Interview> interviews = new();
+
+    private Interview newInterview = new();
+    private Interview? editingInterview;
+
+    private DateTime? scheduledDate = DateTime.Today;
+    private string scheduledTime = string.Empty;
+
+    private DateTime? rescheduleDate;
+    private string rescheduleTime = string.Empty;
+
+    private bool isLoading = true;
+    private bool isRescheduleDialogOpen;
+
+    private string? message;
+    private string messageClass = "alert-success";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPageDataAsync();
+
+        newInterview.DurationMinutes = 60;
+
+        isLoading = false;
+    }
+
+    private async Task LoadPageDataAsync()
+    {
+        approvedCandidates = await DbContext.CandidateApplications
+            .Include(candidate => candidate.Vacancy)
+            .Where(candidate =>
+                candidate.Status == "Approved for Interview" ||
+                candidate.Status == "In interview process")
+            .OrderBy(candidate => candidate.FullName)
+            .ToListAsync();
+
+        interviews = await DbContext.Interviews
+            .Include(interview => interview.CandidateApplication)
+                .ThenInclude(candidate => candidate!.Vacancy)
+            .OrderByDescending(interview => interview.ScheduledDateTime)
+            .ToListAsync();
+    }
+
+    private async Task ScheduleInterviewAsync()
+    {
+        if (newInterview.CandidateApplicationId == 0 ||
+            string.IsNullOrWhiteSpace(newInterview.Stage) ||
+            !scheduledDate.HasValue ||
+            string.IsNullOrWhiteSpace(scheduledTime) ||
+            string.IsNullOrWhiteSpace(newInterview.Mode) ||
+            string.IsNullOrWhiteSpace(newInterview.InterviewerEmail))
+        {
+            ShowMessage(
+                "Please complete every interview field before scheduling.",
+                "alert-danger");
+
+            return;
+        }
+
+        if (!TimeOnly.TryParse(scheduledTime, out var parsedTime))
+        {
+            ShowMessage("Please enter a valid interview time.", "alert-danger");
+            return;
+        }
+
+        var candidate = await DbContext.CandidateApplications
+            .FirstOrDefaultAsync(application =>
+                application.Id == newInterview.CandidateApplicationId);
+
+        if (candidate is null)
+        {
+            ShowMessage("The selected candidate could not be found.", "alert-danger");
+            return;
+        }
+
+        newInterview.ScheduledDateTime = DateTime.SpecifyKind(
+            scheduledDate.Value.Date.Add(parsedTime.ToTimeSpan()),
+            DateTimeKind.Local).ToUniversalTime();
+
+        newInterview.Status = "Scheduled";
+        newInterview.CreatedAt = DateTime.UtcNow;
+
+        DbContext.Interviews.Add(newInterview);
+
+        candidate.Status = "In interview process";
+
+        await DbContext.SaveChangesAsync();
+
+        ShowMessage("Interview scheduled successfully.", "alert-success");
+
+        newInterview = new Interview
+        {
+            DurationMinutes = 60
+        };
+
+        scheduledDate = DateTime.Today;
+        scheduledTime = string.Empty;
+
+        await LoadPageDataAsync();
+    }
+
+    private void OpenRescheduleDialog(Interview interview)
+    {
+        editingInterview = new Interview
+        {
+            Id = interview.Id,
+            CandidateApplicationId = interview.CandidateApplicationId,
+            CandidateApplication = interview.CandidateApplication,
+            Stage = interview.Stage,
+            ScheduledDateTime = interview.ScheduledDateTime,
+            DurationMinutes = interview.DurationMinutes,
+            Mode = interview.Mode,
+            InterviewerEmail = interview.InterviewerEmail,
+            Status = interview.Status,
+            CreatedAt = interview.CreatedAt
+        };
+
+        var localDateTime = interview.ScheduledDateTime.ToLocalTime();
+
+        rescheduleDate = localDateTime.Date;
+        rescheduleTime = localDateTime.ToString("HH:mm");
+
+        isRescheduleDialogOpen = true;
+    }
+
+    private void CloseRescheduleDialog()
+    {
+        editingInterview = null;
+        rescheduleDate = null;
+        rescheduleTime = string.Empty;
+        isRescheduleDialogOpen = false;
+    }
+
+    private async Task SaveRescheduledInterviewAsync()
+    {
+        if (editingInterview is null ||
+            !rescheduleDate.HasValue ||
+            string.IsNullOrWhiteSpace(rescheduleTime))
+        {
+            ShowMessage("Please enter a valid date and time.", "alert-danger");
+            return;
+        }
+
+        if (!TimeOnly.TryParse(rescheduleTime, out var parsedTime))
+        {
+            ShowMessage("Please enter a valid interview time.", "alert-danger");
+            return;
+        }
+
+        var interviewToUpdate = await DbContext.Interviews
+            .FirstOrDefaultAsync(interview => interview.Id == editingInterview.Id);
+
+        if (interviewToUpdate is null)
+        {
+            ShowMessage("The interview could not be found.", "alert-danger");
+            CloseRescheduleDialog();
+            return;
+        }
+
+        interviewToUpdate.CandidateApplicationId =
+            editingInterview.CandidateApplicationId;
+
+        interviewToUpdate.Stage = editingInterview.Stage;
+        interviewToUpdate.DurationMinutes = editingInterview.DurationMinutes;
+        interviewToUpdate.Mode = editingInterview.Mode;
+        interviewToUpdate.InterviewerEmail = editingInterview.InterviewerEmail;
+
+        interviewToUpdate.ScheduledDateTime = DateTime.SpecifyKind(
+            rescheduleDate.Value.Date.Add(parsedTime.ToTimeSpan()),
+            DateTimeKind.Local).ToUniversalTime();
+
+        await DbContext.SaveChangesAsync();
+
+        CloseRescheduleDialog();
+
+        ShowMessage("Interview rescheduled successfully.", "alert-success");
+
+        await LoadPageDataAsync();
+    }
+
+    private async Task CancelInterviewAsync(int interviewId)
+    {
+        var interview = await DbContext.Interviews
+            .FirstOrDefaultAsync(item => item.Id == interviewId);
+
+        if (interview is null)
+        {
+            return;
+        }
+
+        interview.Status = "Cancelled";
+
+        await DbContext.SaveChangesAsync();
+
+        ShowMessage("Interview cancelled successfully.", "alert-success");
+
+        await LoadPageDataAsync();
+    }
+
+    private void ShowMessage(string text, string cssClass)
+    {
+        message = text;
+        messageClass = cssClass;
+    }
+
+    private void ClearMessage()
+    {
+        message = null;
+    }
+
+    private static string GetInterviewerName(string email)
+    {
+        return email switch
+        {
+            "interviewer1@altrium.com" => "Interviewer 1",
+            "interviewer2@altrium.com" => "Interviewer 2",
+            _ => email
+        };
+    }
+
+    private static string GetStatusBadgeClass(string? status)
+    {
+        return status switch
+        {
+            "Scheduled" => "badge text-bg-primary",
+            "Cancelled" => "badge text-bg-danger",
+            "Completed" => "badge text-bg-success",
+            _ => "badge text-bg-secondary"
+        };
+    }
+}

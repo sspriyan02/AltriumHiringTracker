@@ -1,0 +1,407 @@
+﻿@page "/apply/{VacancyId:int}"
+@rendermode InteractiveServer
+
+@using AltriumHiringTracker.Data
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@using System.Text.RegularExpressions
+@inject ApplicationDbContext DbContext
+@inject IWebHostEnvironment Environment
+
+<PageTitle>Apply for a Vacancy</PageTitle>
+
+<div class="container py-5" style="max-width: 900px;">
+    @if (isLoading)
+    {
+        <p class="text-muted">Loading vacancy...</p>
+    }
+    else if (vacancy is null)
+    {
+        <div class="alert alert-danger">
+            This vacancy does not exist or is no longer available.
+        </div>
+    }
+    else if (vacancy.Status != "Open")
+    {
+        <div class="alert alert-warning">
+            This vacancy is not currently accepting applications.
+        </div>
+    }
+    else if (isSubmitted)
+    {
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-5 text-center">
+                <h1 class="h3 mb-3">Application submitted</h1>
+                <p class="mb-0">
+                    Thank you for applying for <strong>@vacancy.Title</strong>.
+                    Our recruitment team will review your application.
+                </p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body p-4">
+                <p class="text-muted mb-2">Altrium Hiring Tracker</p>
+                <h1 class="h3 mb-3">@vacancy.Title</h1>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <strong>Department</strong>
+                        <div>@vacancy.Department</div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <strong>Employment type</strong>
+                        <div>@vacancy.EmploymentType</div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <strong>Openings</strong>
+                        <div>@vacancy.NumberOfOpenings</div>
+                    </div>
+                </div>
+
+                <h2 class="h5">Job description</h2>
+                <p style="white-space: pre-line;">@vacancy.JobDescription</p>
+
+                <h2 class="h5 mt-4">Requirements</h2>
+                <p class="mb-0" style="white-space: pre-line;">@vacancy.ExpectedCriteria</p>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <h2 class="h4 mb-4">Apply for this role</h2>
+
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger">
+                        @errorMessage
+                    </div>
+                }
+
+                <EditForm Model="application" OnValidSubmit="SubmitApplicationAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Full name</label>
+                            <InputText class="form-control"
+                                       @bind-Value="application.FullName" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Email address</label>
+                            <InputText class="form-control"
+                                       type="email"
+                                       @bind-Value="application.Email" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Contact number</label>
+                            <InputText class="form-control"
+                                       @bind-Value="application.PhoneNumber" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Years of experience</label>
+                            <InputNumber class="form-control"
+                                         @bind-Value="application.YearsOfExperience" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Highest qualification</label>
+                            <InputText class="form-control"
+                                       placeholder="Example: BSc in Computer Science"
+                                       @bind-Value="application.HighestQualification" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">CV / Resume</label>
+                            <InputFile class="form-control"
+                                       accept=".pdf,.doc,.docx"
+                                       OnChange="SelectCv" />
+
+                            <div class="form-text">
+                                Upload a PDF, DOC, or DOCX file. Maximum size: 5 MB.
+                            </div>
+
+                            @if (selectedCv is not null)
+                            {
+                                <div class="text-success small mt-2">
+                                    Selected: @selectedCv.Name
+                                </div>
+                            }
+                        </div>
+
+                        <div class="col-12 mt-4">
+                            <button type="submit"
+                                    class="btn btn-warning text-dark"
+                                    disabled="@isSubmitting">
+                                @(isSubmitting ? "Submitting..." : "Submit application")
+                            </button>
+                        </div>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int VacancyId { get; set; }
+
+    private Vacancy? vacancy;
+    private CandidateApplication application = new();
+    private IBrowserFile? selectedCv;
+
+    private bool isLoading = true;
+    private bool isSubmitting = false;
+    private bool isSubmitted = false;
+
+    private string? errorMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        vacancy = await DbContext.Vacancies
+            .FirstOrDefaultAsync(v => v.Id == VacancyId);
+
+        application = new CandidateApplication
+        {
+            VacancyId = VacancyId,
+            Status = "Submitted"
+        };
+
+        selectedCv = null;
+        isSubmitted = false;
+        isLoading = false;
+    }
+
+    private void SelectCv(InputFileChangeEventArgs args)
+    {
+        errorMessage = null;
+        selectedCv = args.File;
+
+        if (selectedCv.Size > 5 * 1024 * 1024)
+        {
+            errorMessage = "The CV file must be 5 MB or smaller.";
+            selectedCv = null;
+        }
+    }
+
+    private async Task SubmitApplicationAsync()
+    {
+        if (vacancy is null || vacancy.Status != "Open")
+        {
+            errorMessage = "This vacancy is no longer accepting applications.";
+            return;
+        }
+
+        if (selectedCv is null)
+        {
+            errorMessage = "Please select your CV before submitting.";
+            return;
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            var existingApplication = await DbContext.CandidateApplications
+                .AnyAsync(a => a.VacancyId == VacancyId &&
+                               a.Email == application.Email);
+
+            if (existingApplication)
+            {
+                errorMessage = "An application with this email address has already been submitted for this vacancy.";
+                return;
+            }
+
+            var allowedExtensions = new[] { ".pdf", ".doc", ".docx" };
+            var extension = Path.GetExtension(selectedCv.Name).ToLowerInvariant();
+
+            if (!allowedExtensions.Contains(extension))
+            {
+                errorMessage = "Please upload a PDF, DOC, or DOCX file.";
+                return;
+            }
+
+            var uploadsFolder = Path.Combine(
+                Environment.WebRootPath,
+                "uploads",
+                "cvs");
+
+            Directory.CreateDirectory(uploadsFolder);
+
+            var storedFileName = $"{Guid.NewGuid()}{extension}";
+            var filePath = Path.Combine(uploadsFolder, storedFileName);
+
+            await using var fileStream = File.Create(filePath);
+
+            await selectedCv.OpenReadStream(
+                    maxAllowedSize: 5 * 1024 * 1024)
+                .CopyToAsync(fileStream);
+
+            var screeningResult = CalculateMatchResult(
+                vacancy.ExpectedCriteria,
+                application.HighestQualification,
+                application.YearsOfExperience,
+                selectedCv.Name);
+
+            application.VacancyId = VacancyId;
+            application.CvOriginalFileName = selectedCv.Name;
+            application.CvStoredFileName = storedFileName;
+            application.CvFilePath = $"/uploads/cvs/{storedFileName}";
+            application.SubmittedAt = DateTime.UtcNow;
+
+            application.MatchScore = screeningResult.MatchScore;
+            application.MatchCategory = screeningResult.MatchCategory;
+            application.MatchedCriteria = screeningResult.MatchedCriteria;
+            application.MissingCriteria = screeningResult.MissingCriteria;
+            application.Status = screeningResult.Status;
+
+            DbContext.CandidateApplications.Add(application);
+            await DbContext.SaveChangesAsync();
+
+            isSubmitted = true;
+        }
+        catch
+        {
+            errorMessage = "Your application could not be submitted. Please try again.";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private ScreeningResult CalculateMatchResult(
+        string expectedCriteria,
+        string qualification,
+        int yearsOfExperience,
+        string cvFileName)
+    {
+        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "and", "or", "the", "a", "an", "of", "in", "with", "to",
+            "for", "is", "are", "be", "must", "have", "years", "year",
+            "experience", "required", "candidate", "skills", "knowledge"
+        };
+
+        var criteriaWords = Regex.Matches(
+                expectedCriteria.ToLowerInvariant(),
+                @"[a-z0-9#+.]+")
+            .Select(match => match.Value)
+            .Where(word => word.Length >= 2 && !stopWords.Contains(word))
+            .Distinct()
+            .ToList();
+
+        var candidateText = $"{qualification} {cvFileName}"
+            .ToLowerInvariant();
+
+        var matchedWords = criteriaWords
+            .Where(word => candidateText.Contains(word))
+            .ToList();
+
+        var missingWords = criteriaWords
+            .Except(matchedWords)
+            .ToList();
+
+        decimal score;
+
+        if (criteriaWords.Count == 0)
+        {
+            score = 50;
+        }
+        else
+        {
+            score = Math.Round(
+                (decimal)matchedWords.Count / criteriaWords.Count * 100,
+                2);
+        }
+
+        var requiredYears = GetRequiredYears(expectedCriteria);
+
+        if (requiredYears.HasValue)
+        {
+            if (yearsOfExperience >= requiredYears.Value)
+            {
+                score = Math.Min(100, score + 15);
+            }
+            else
+            {
+                score = Math.Max(0, score - 15);
+            }
+        }
+
+        string status;
+        string category;
+
+        if (score >= 70)
+        {
+            status = "Shortlisted";
+            category = "High match";
+        }
+        else if (score >= 50)
+        {
+            status = "Under review";
+            category = "Medium match";
+        }
+        else
+        {
+            status = "Not shortlisted";
+            category = "Low match";
+        }
+
+        return new ScreeningResult
+        {
+            MatchScore = score,
+            MatchCategory = category,
+            MatchedCriteria = matchedWords.Count == 0
+                ? "No criteria matched."
+                : string.Join(", ", matchedWords),
+
+            MissingCriteria = missingWords.Count == 0
+                ? "No criteria missing."
+                : string.Join(", ", missingWords),
+
+            Status = status
+        };
+    }
+
+    private static int? GetRequiredYears(string expectedCriteria)
+    {
+        var match = Regex.Match(
+            expectedCriteria,
+            @"(\d+)\s*\+?\s*years?",
+            RegexOptions.IgnoreCase);
+
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var years))
+        {
+            return years;
+        }
+
+        return null;
+    }
+
+    private class ScreeningResult
+    {
+        public decimal MatchScore { get; set; }
+
+        public string MatchCategory { get; set; } = string.Empty;
+
+        public string MatchedCriteria { get; set; } = string.Empty;
+
+        public string MissingCriteria { get; set; } = string.Empty;
+
+        public string Status { get; set; } = string.Empty;
+    }
+}

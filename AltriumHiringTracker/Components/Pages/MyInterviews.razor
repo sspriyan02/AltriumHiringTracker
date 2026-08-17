@@ -1,0 +1,139 @@
+﻿@page "/my-interviews"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Interviewer")]
+
+@using AltriumHiringTracker.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>My Interviews</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="mb-4">
+        <h1 class="h3 mb-1">My Interviews</h1>
+        <p class="text-muted mb-0">
+            Interviews currently assigned to you.
+        </p>
+    </div>
+
+    @if (isLoading)
+    {
+        <p class="text-muted">Loading your assigned interviews...</p>
+    }
+    else if (interviews.Count == 0)
+    {
+        <div class="alert alert-info">
+            You have no assigned interviews at the moment.
+        </div>
+    }
+    else
+    {
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Candidate</th>
+                                <th>Vacancy</th>
+                                <th>Stage</th>
+                                <th>Date and time</th>
+                                <th>Duration</th>
+                                <th>Mode</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var interview in interviews)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">
+                                            @interview.CandidateApplication?.FullName
+                                        </div>
+
+                                        <div class="small text-muted">
+                                            @interview.CandidateApplication?.Email
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        @interview.CandidateApplication?.Vacancy?.Title
+                                    </td>
+
+                                    <td>@interview.Stage</td>
+
+                                    <td>
+                                        <div>
+                                            @(interview.ScheduledDateTime
+                                                .ToLocalTime()
+                                                .ToString("dd MMM yyyy"))
+                                        </div>
+
+                                        <div class="small text-muted">
+                                            @(interview.ScheduledDateTime
+                                                .ToLocalTime()
+                                                .ToString("hh:mm tt"))
+                                        </div>
+                                    </td>
+
+                                    <td>@interview.DurationMinutes min</td>
+
+                                    <td>@interview.Mode</td>
+
+                                    <td>
+                                        <span class="@GetStatusBadgeClass(interview.Status)">
+                                            @interview.Status
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Interview> interviews = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState =
+            await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
+        var currentUserEmail =
+            authenticationState.User.Identity?.Name;
+
+        if (!string.IsNullOrWhiteSpace(currentUserEmail))
+        {
+            interviews = await DbContext.Interviews
+                .Include(interview => interview.CandidateApplication)
+                    .ThenInclude(candidate => candidate!.Vacancy)
+                .Where(interview =>
+                    interview.InterviewerEmail == currentUserEmail)
+                .OrderBy(interview => interview.ScheduledDateTime)
+                .ToListAsync();
+        }
+
+        isLoading = false;
+    }
+
+    private static string GetStatusBadgeClass(string? status)
+    {
+        return status switch
+        {
+            "Scheduled" => "badge text-bg-primary",
+            "Cancelled" => "badge text-bg-danger",
+            "Completed" => "badge text-bg-success",
+            _ => "badge text-bg-secondary"
+        };
+    }
+}

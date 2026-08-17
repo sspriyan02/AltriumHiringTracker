@@ -1,0 +1,152 @@
+﻿@implements IDisposable
+
+@inject NavigationManager NavigationManager
+
+<div class="sidebar-menu">
+    <div class="sidebar-brand">
+        <div class="sidebar-logo">A</div>
+
+        <div>
+            <div class="sidebar-brand-name">altrium</div>
+            <div class="sidebar-brand-subtitle">Hiring Tracker</div>
+        </div>
+    </div>
+
+    <input type="checkbox"
+           title="Navigation menu"
+           class="navbar-toggler" />
+
+    <div class="nav-scrollable"
+         onclick="document.querySelector('.navbar-toggler').click()">
+
+        <nav class="nav flex-column">
+            <AuthorizeView Context="userContext">
+                <Authorized>
+                    <div class="sidebar-section-title">RECRUITMENT</div>
+
+                    <div class="nav-item">
+                        <NavLink class="nav-link"
+                                 href="dashboard"
+                                 Match="NavLinkMatch.All">
+                            <span class="bi bi-grid-1x2" aria-hidden="true"></span>
+                            Dashboard
+                        </NavLink>
+                    </div>
+
+                    <AuthorizeView Roles="HR" Context="hrContext">
+                        <Authorized>
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="vacancies">
+                                    <span class="bi bi-briefcase" aria-hidden="true"></span>
+                                    Vacancies
+                                </NavLink>
+                            </div>
+
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="candidates">
+                                    <span class="bi bi-people" aria-hidden="true"></span>
+                                    Candidates
+                                </NavLink>
+                            </div>
+
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="interview-scheduling">
+                                    <span class="bi bi-calendar-check" aria-hidden="true"></span>
+                                    Interview Scheduling
+                                </NavLink>
+                            </div>
+                        </Authorized>
+                    </AuthorizeView>
+
+                    <AuthorizeView Roles="Interviewer" Context="interviewerContext">
+                        <Authorized>
+                            <div class="nav-item">
+                                <NavLink class="nav-link" href="my-interviews">
+                                    <span class="bi bi-calendar2-check" aria-hidden="true"></span>
+                                    My Interviews
+                                </NavLink>
+                            </div>
+                        </Authorized>
+                    </AuthorizeView>
+                </Authorized>
+            </AuthorizeView>
+        </nav>
+    </div>
+
+    <AuthorizeView>
+        <Authorized>
+            <div class="sidebar-user-card">
+                <div class="sidebar-user-avatar">
+                    @GetInitial()
+                </div>
+
+                <div class="sidebar-user-details">
+                    <div class="sidebar-user-name">
+                        @context.User.Identity?.Name
+                    </div>
+
+                    <div class="sidebar-user-role">
+                        @GetRole(context.User)
+                    </div>
+                </div>
+
+                <form action="Account/Logout" method="post" class="sidebar-logout-form">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+
+                    <button type="submit"
+                            class="sidebar-logout-button"
+                            title="Log out">
+                        <span class="bi bi-box-arrow-right" aria-hidden="true"></span>
+                    </button>
+                </form>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+@code {
+    private string? currentUrl;
+
+    protected override void OnInitialized()
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    private static string GetRole(System.Security.Claims.ClaimsPrincipal user)
+    {
+        if (user.IsInRole("HR"))
+        {
+            return "HR Officer";
+        }
+
+        if (user.IsInRole("Interviewer"))
+        {
+            return "Interviewer";
+        }
+
+        if (user.IsInRole("Management"))
+        {
+            return "Management";
+        }
+
+        return "User";
+    }
+
+    private static string GetInitial()
+    {
+        return "A";
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}

@@ -1,0 +1,456 @@
+﻿@page "/vacancies"
+@rendermode InteractiveServer
+
+@using AltriumHiringTracker.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Forms
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Vacancy Management</PageTitle>
+
+<div class="vacancies-page-header">
+    <div>
+        <h1 class="vacancies-title">Vacancy Management</h1>
+        <p class="vacancies-subtitle">
+            Every approved requisition in one register – create, edit, and close vacancies.
+        </p>
+    </div>
+
+    <button class="btn btn-sm btn-primary auth-primary-btn" @onclick="OpenCreateDialog">
+        + Create vacancy
+    </button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(copyMessage))
+{
+    <div class="alert alert-success py-2 mt-3 mb-3">
+        @copyMessage
+    </div>
+}
+
+<div class="vacancies-card">
+    <div class="vacancies-card-header">
+        <div>
+            <h2 class="vacancies-card-title">All vacancies</h2>
+        </div>
+    </div>
+
+    <table class="table vacancies-table">
+        <thead>
+            <tr>
+                <th>Reference</th>
+                <th>Vacancy title</th>
+                <th>Department</th>
+                <th>Interviewer</th>
+                <th>Status</th>
+                <th>Open date</th>
+                <th>Closing date</th>
+                <th>Applicants</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            @if (vacancies.Count == 0)
+            {
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-4">
+                        No vacancies have been created yet.
+                    </td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var vacancy in vacancies)
+                {
+                    <tr>
+                        <td>@($"ALT-{vacancy.Id:0000}")</td>
+                        <td>@vacancy.Title</td>
+                        <td>@vacancy.Department</td>
+                        <td>@vacancy.HiringManager</td>
+                        <td>@vacancy.Status</td>
+                        <td>@vacancy.OpenDate?.ToString("dd MMM yyyy")</td>
+                        <td>@vacancy.ClosingDate?.ToString("dd MMM yyyy")</td>
+                        <td>-</td>
+                        <td>
+                            <button class="btn btn-link btn-sm"
+                                    @onclick="() => GoToPipeline(vacancy.Id)">
+                                Pipeline
+                            </button>
+
+                            <button class="btn btn-link btn-sm"
+                                    @onclick="() => OpenEditDialog(vacancy)">
+                                Edit
+                            </button>
+
+                            <button class="btn btn-link btn-sm"
+                                    @onclick="() => CopyApplicationLinkAsync(vacancy.Id)">
+                                Copy application link
+                            </button>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+@* CREATE VACANCY DIALOG *@
+@if (isCreateDialogOpen)
+{
+    <div class="modal fade show d-block"
+         tabindex="-1"
+         style="background-color: rgba(0,0,0,0.5);">
+
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create vacancy</h5>
+
+                    <button type="button"
+                            class="btn-close"
+                            aria-label="Close"
+                            @onclick="CloseCreateDialog">
+                    </button>
+                </div>
+
+                <EditForm Model="newVacancy" OnValidSubmit="CreateVacancyAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="modal-body"
+                         style="max-height: calc(100vh - 210px); overflow-y: auto;">
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Vacancy title</label>
+                                <InputText class="form-control"
+                                           @bind-Value="newVacancy.Title" />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Department</label>
+                                <InputText class="form-control"
+                                           @bind-Value="newVacancy.Department" />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Interviewer</label>
+                                <InputText class="form-control"
+                                           @bind-Value="newVacancy.HiringManager" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Number of openings</label>
+                                <InputNumber class="form-control"
+                                             @bind-Value="newVacancy.NumberOfOpenings" />
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Employment type</label>
+                                <InputSelect class="form-select"
+                                             @bind-Value="newVacancy.EmploymentType">
+                                    <option value="Full-time">Full-time</option>
+                                    <option value="Part-time">Part-time</option>
+                                    <option value="Intern">Intern</option>
+                                </InputSelect>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label">Status</label>
+                                <InputSelect class="form-select"
+                                             @bind-Value="newVacancy.Status">
+                                    <option value="Open">Open</option>
+                                    <option value="On hold">On hold</option>
+                                    <option value="Closed">Closed</option>
+                                </InputSelect>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Open date</label>
+                                <InputDate class="form-control"
+                                           @bind-Value="newVacancy.OpenDate" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Closing date</label>
+                                <InputDate class="form-control"
+                                           @bind-Value="newVacancy.ClosingDate" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Job description</label>
+                                <InputTextArea class="form-control"
+                                               rows="4"
+                                               placeholder="Enter a short description of the role, responsibilities, and purpose."
+                                               @bind-Value="newVacancy.JobDescription" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Expected criteria / requirements</label>
+                                <InputTextArea class="form-control"
+                                               rows="4"
+                                               placeholder="Enter qualifications, required skills, certifications, and years of experience."
+                                               @bind-Value="newVacancy.ExpectedCriteria" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button"
+                                class="btn btn-outline-secondary btn-sm"
+                                @onclick="CloseCreateDialog">
+                            Cancel
+                        </button>
+
+                        <button type="submit"
+                                class="btn btn-warning btn-sm text-dark">
+                            Save vacancy
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@* EDIT VACANCY DIALOG *@
+@if (isEditDialogOpen && editingVacancy is not null)
+{
+    <div class="modal fade show d-block"
+         tabindex="-1"
+         style="background-color: rgba(0,0,0,0.5);">
+
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title">
+                            Edit vacancy - @editingVacancy.Title
+                        </h5>
+
+                        <div class="text-muted mt-1">
+                            ALT-@editingVacancy.Id.ToString("0000")
+                        </div>
+                    </div>
+
+                    <button type="button"
+                            class="btn-close"
+                            aria-label="Close"
+                            @onclick="CloseEditDialog">
+                    </button>
+                </div>
+
+                <EditForm Model="editingVacancy" OnValidSubmit="SaveEditedVacancyAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="modal-body"
+                         style="max-height: calc(100vh - 225px); overflow-y: auto;">
+
+                        <div class="mb-4">
+                            <label class="form-label">Job description</label>
+                            <InputTextArea class="form-control"
+                                           rows="5"
+                                           @bind-Value="editingVacancy.JobDescription" />
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Expected criteria / requirements</label>
+                            <InputTextArea class="form-control"
+                                           rows="5"
+                                           @bind-Value="editingVacancy.ExpectedCriteria" />
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Closing date</label>
+                                <InputDate class="form-control"
+                                           @bind-Value="editingVacancy.ClosingDate" />
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Status</label>
+                                <InputSelect class="form-select"
+                                             @bind-Value="editingVacancy.Status">
+                                    <option value="Open">Open</option>
+                                    <option value="On hold">On hold</option>
+                                    <option value="Closed">Closed</option>
+                                </InputSelect>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer d-flex justify-content-between">
+                        <button type="button"
+                                class="btn btn-outline-danger"
+                                @onclick="CloseVacancyAsync">
+                            Close vacancy
+                        </button>
+
+                        <button type="submit"
+                                class="btn btn-warning text-dark">
+                            Save changes
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Vacancy> vacancies = new();
+
+    private Vacancy newVacancy = new();
+    private Vacancy? editingVacancy;
+
+    private bool isCreateDialogOpen = false;
+    private bool isEditDialogOpen = false;
+
+    private string? copyMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVacanciesAsync();
+    }
+
+    private async Task LoadVacanciesAsync()
+    {
+        vacancies = await DbContext.Vacancies
+            .OrderByDescending(v => v.CreatedAt)
+            .ToListAsync();
+    }
+
+    private void OpenCreateDialog()
+    {
+        newVacancy = new Vacancy
+        {
+            OpenDate = DateTime.UtcNow,
+            Status = "Open",
+            NumberOfOpenings = 1,
+            EmploymentType = "Full-time"
+        };
+
+        isCreateDialogOpen = true;
+    }
+
+    private void CloseCreateDialog()
+    {
+        isCreateDialogOpen = false;
+        newVacancy = new Vacancy();
+    }
+
+    private async Task CreateVacancyAsync()
+    {
+        newVacancy.CreatedAt = DateTime.UtcNow;
+        newVacancy.OpenDate ??= DateTime.UtcNow;
+
+        DbContext.Vacancies.Add(newVacancy);
+        await DbContext.SaveChangesAsync();
+
+        await LoadVacanciesAsync();
+
+        isCreateDialogOpen = false;
+        newVacancy = new Vacancy();
+    }
+
+    private void OpenEditDialog(Vacancy vacancy)
+    {
+        editingVacancy = new Vacancy
+        {
+            Id = vacancy.Id,
+            Title = vacancy.Title,
+            Department = vacancy.Department,
+            HiringManager = vacancy.HiringManager,
+            NumberOfOpenings = vacancy.NumberOfOpenings,
+            EmploymentType = vacancy.EmploymentType,
+            Status = vacancy.Status,
+            OpenDate = vacancy.OpenDate,
+            ClosingDate = vacancy.ClosingDate,
+            JobDescription = vacancy.JobDescription,
+            ExpectedCriteria = vacancy.ExpectedCriteria,
+            RecruitmentStage = vacancy.RecruitmentStage,
+            CreatedAt = vacancy.CreatedAt
+        };
+
+        isEditDialogOpen = true;
+    }
+
+    private void CloseEditDialog()
+    {
+        isEditDialogOpen = false;
+        editingVacancy = null;
+    }
+
+    private async Task SaveEditedVacancyAsync()
+    {
+        if (editingVacancy is null)
+        {
+            return;
+        }
+
+        var vacancyToUpdate = await DbContext.Vacancies
+            .FirstOrDefaultAsync(v => v.Id == editingVacancy.Id);
+
+        if (vacancyToUpdate is null)
+        {
+            return;
+        }
+
+        vacancyToUpdate.JobDescription = editingVacancy.JobDescription;
+        vacancyToUpdate.ExpectedCriteria = editingVacancy.ExpectedCriteria;
+        vacancyToUpdate.ClosingDate = editingVacancy.ClosingDate;
+        vacancyToUpdate.Status = editingVacancy.Status;
+
+        await DbContext.SaveChangesAsync();
+
+        await LoadVacanciesAsync();
+
+        isEditDialogOpen = false;
+        editingVacancy = null;
+    }
+
+    private async Task CloseVacancyAsync()
+    {
+        if (editingVacancy is null)
+        {
+            return;
+        }
+
+        var vacancyToClose = await DbContext.Vacancies
+            .FirstOrDefaultAsync(v => v.Id == editingVacancy.Id);
+
+        if (vacancyToClose is null)
+        {
+            return;
+        }
+
+        vacancyToClose.Status = "Closed";
+
+        await DbContext.SaveChangesAsync();
+
+        await LoadVacanciesAsync();
+
+        isEditDialogOpen = false;
+        editingVacancy = null;
+    }
+
+    private void GoToPipeline(int vacancyId)
+    {
+        Navigation.NavigateTo($"/recruitment-pipeline/{vacancyId}");
+    }
+
+    private async Task CopyApplicationLinkAsync(int vacancyId)
+    {
+        var applicationLink = $"{Navigation.BaseUri}apply/{vacancyId}";
+
+        await JS.InvokeVoidAsync(
+            "navigator.clipboard.writeText",
+            applicationLink);
+
+        copyMessage = "Application link copied. You can now paste it into LinkedIn or another job site.";
+    }
+}
